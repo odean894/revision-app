@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --parchment: #F5EFE6;
+    --ink: #1A1A2E;
+    --accent: #C27B7B;
+    --sage: #7D8E7B;
+    --cream: #FFF8F0;
+  }
+
+  body {
+    @apply bg-cream text-ink font-body antialiased;
+  }
+
+  h1, h2, h3 {
+    @apply font-display;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-parchment;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-sage/40 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-sage/60;
+}
+
+/* Markdown-style note content */
+.note-content h2 {
+  @apply text-xl font-display mt-6 mb-3 text-ink;
+}
+
+.note-content h3 {
+  @apply text-lg font-display mt-4 mb-2 text-ink;
+}
+
+.note-content ul, .note-content ol {
+  @apply ml-4 my-2;
+}
+
+.note-content li {
+  @apply my-1;
+}
+
+.note-content strong {
+  @apply font-semibold text-ink;
+}
+
+.note-content p {
+  @apply my-2;
+}
