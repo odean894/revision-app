@@ -40,4 +40,3 @@ All data (modules, files, notes, quizzes) is stored locally in your browser (Ind
 
 - PDFs must contain selectable text (not scans/images)
 - If slides are image-based, use OCR tools first to convert them to text
-
