@@ -42,4 +42,3 @@ All data (modules, files, notes, quizzes) is stored locally in your browser (Ind
 - If slides are image-based, use OCR tools first to convert them to text
 
 
-
