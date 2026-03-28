@@ -26,3 +26,7 @@ yarn-error.log*
 # env files (keep secrets out of git)
 .env*.local
 env.local
+
+# sandbox (uploaded files stored locally)
+/sandbox/
+*.swp

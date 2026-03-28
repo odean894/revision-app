@@ -3,9 +3,9 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, BookOpen, ChevronRight, GraduationCap } from 'lucide-react';
+import { Plus, BookOpen, ChevronRight, GraduationCap, FolderDown, Loader2 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
-import { getModules, addModule as addModuleData, deleteModule as deleteModuleData } from '@/lib/data';
+import { getModules, addModule as addModuleData, deleteModule as deleteModuleData, getNotes } from '@/lib/data';
 import AuthUI from '@/components/AuthUI';
 import type { Module } from '@/lib/db';
 
@@ -18,6 +18,7 @@ export default function HomePage() {
   const [modules, setModules] = useState<Module[]>([]);
   const [showAdd, setShowAdd] = useState(false);
   const [newName, setNewName] = useState('');
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     getModules(user?.id ?? null).then(setModules);
@@ -50,6 +51,42 @@ export default function HomePage() {
     setModules((prev) => prev.filter((m) => m.id !== id));
   };
 
+  const exportAllToSandbox = async () => {
+    const userId = user?.id ?? null;
+    setExporting(true);
+    try {
+      const mods = await getModules(userId);
+      if (mods.length === 0) {
+        alert('No modules to export.');
+        return;
+      }
+      const allNotes: { id: string; moduleId: string; week?: number; topic: string; content: string }[] = [];
+      for (const mod of mods) {
+        const notes = await getNotes(mod.id, userId);
+        allNotes.push(...notes);
+      }
+      if (allNotes.length === 0) {
+        alert('No notes to export. Generate some notes from your uploads first.');
+        return;
+      }
+      const res = await fetch('/api/export-to-sandbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          modules: mods.map((m) => ({ id: m.id, name: m.name })),
+          notes: allNotes.map((n) => ({ id: n.id, moduleId: n.moduleId, week: n.week ?? 1, topic: n.topic, content: n.content })),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Export failed');
+      alert(`Exported ${data.exported} note(s) as PDFs to sandbox folder.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-cream">
       <header className="border-b border-ink/10 bg-parchment/80 backdrop-blur">
@@ -68,15 +105,26 @@ export default function HomePage() {
       </header>
 
       <main className="max-w-4xl mx-auto px-6 py-12">
-        <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center justify-between gap-4 mb-8 flex-wrap">
           <h2 className="font-display text-2xl text-ink">Your Modules</h2>
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent-dark transition"
-          >
-            <Plus className="w-5 h-5" />
-            Add module
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={exportAllToSandbox}
+              disabled={exporting || modules.length === 0}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-sage/40 text-ink/80 hover:bg-parchment/50 disabled:opacity-50 transition"
+              title="Export all generated notes as PDFs to module folders"
+            >
+              {exporting ? <Loader2 className="w-5 h-5 animate-spin" /> : <FolderDown className="w-5 h-5" />}
+              {exporting ? 'Exporting...' : 'Export notes as PDFs'}
+            </button>
+            <button
+              onClick={() => setShowAdd(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-accent text-white hover:bg-accent-dark transition"
+            >
+              <Plus className="w-5 h-5" />
+              Add module
+            </button>
+          </div>
         </div>
 
         <AnimatePresence>

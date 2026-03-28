@@ -12,22 +12,25 @@ create table if not exists modules (
   created_at bigint not null
 );
 
--- Files (uploaded PDF content)
+-- Files (uploaded PDF content, grouped by week 1-11)
 create table if not exists files (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   module_id uuid references modules(id) on delete cascade not null,
+  week int not null default 1,
   type text not null check (type in ('slides', 'tutorial', 'pastpaper')),
   name text not null,
   content text not null,
   uploaded_at bigint not null
 );
 
--- Notes (AI-generated)
+-- Notes (AI-generated, separate per week and type: slides, tutorial, pastpaper)
 create table if not exists notes (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references auth.users(id) on delete cascade not null,
   module_id uuid references modules(id) on delete cascade not null,
+  week int not null default 1,
+  note_type text check (note_type is null or note_type in ('slides', 'tutorial', 'pastpaper')),
   source_file_id uuid references files(id) on delete set null,
   topic text not null,
   content text not null,

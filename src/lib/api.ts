@@ -1,13 +1,39 @@
 'use client';
 
-const MAX_TEXT_LENGTH = 8000;
+const MAX_TEXT_LENGTH = 32000;
+const MAX_PER_DOC = 8000;
 
-export async function generateNotes(text: string, topic?: string): Promise<string> {
-  const truncated = text.slice(0, MAX_TEXT_LENGTH);
+export async function generateNotes(
+  text: string,
+  topic?: string,
+  options?: { isTutorial?: boolean }
+): Promise<string>;
+export async function generateNotes(
+  documents: { text: string; label: string }[],
+  topic?: string,
+  options?: { isTutorial?: boolean }
+): Promise<string>;
+export async function generateNotes(
+  textOrDocs: string | { text: string; label: string }[],
+  topic?: string,
+  options?: { isTutorial?: boolean }
+): Promise<string> {
+  let text: string;
+  let topicParam: string | undefined;
+  if (typeof textOrDocs === 'string') {
+    text = textOrDocs.slice(0, MAX_TEXT_LENGTH);
+    topicParam = topic;
+  } else {
+    const combined = textOrDocs
+      .map((d) => `## ${d.label}\n\n${d.text.slice(0, MAX_PER_DOC)}`)
+      .join('\n\n---\n\n');
+    text = combined.slice(0, MAX_TEXT_LENGTH);
+    topicParam = topic ?? (textOrDocs.length > 0 ? 'combined week materials' : undefined);
+  }
   const res = await fetch('/api/generate-notes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: truncated, topic }),
+    body: JSON.stringify({ text, topic: topicParam, isTutorial: options?.isTutorial }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));

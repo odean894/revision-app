@@ -5,11 +5,12 @@ An interactive revision app for University of Exeter students. Upload lecture sl
 ## Features
 
 - **Multiple modules** – Add a module for each course
-- **File upload** – Upload PDFs for:
-  - Lecture slides
+- **Weekly structure** – Organise content by Week 1–11 under each module
+- **File upload** – Upload multiple PDFs per week:
+  - Lecture slides (e.g. part 1, part 2)
   - Tutorial questions and answers
   - Past papers
-- **AI-generated notes** – Detailed revision notes from each uploaded file
+- **AI-generated notes** – Combined notes from all documents in a week
 - **Interactive quiz** – Auto-generated multiple-choice questions with explanations
 - **Exam help** – Tips and a catch-up plan tailored to missed lectures
 

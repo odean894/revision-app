@@ -4,19 +4,24 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileText, ChevronDown, ChevronUp, Trash2, Pencil, Check, X } from 'lucide-react';
 import { marked } from 'marked';
-import { deleteNote, updateNoteTopic } from '@/lib/data';
-import type { GeneratedNote } from '@/lib/db';
+import { deleteNote, updateNoteTopic, updateNoteWeek } from '@/lib/data';
+import type { GeneratedNote, UploadedFile } from '@/lib/db';
+import NoteChatPanel from './NoteChatPanel';
 
 interface Props {
   notes: GeneratedNote[];
+  files: UploadedFile[];
   onRefresh: () => void;
   userId: string | null;
 }
 
-export default function NotesView({ notes, onRefresh, userId }: Props) {
+export default function NotesView({ notes, files, onRefresh, userId }: Props) {
   const [expanded, setExpanded] = useState<string | null>(notes[0]?.id ?? null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [movingNoteId, setMovingNoteId] = useState<string | null>(null);
+
+  const WEEKS = Array.from({ length: 11 }, (_, i) => i + 1);
 
   const handleDelete = async (note: GeneratedNote, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -47,20 +52,51 @@ export default function NotesView({ notes, onRefresh, userId }: Props) {
     setEditName('');
   };
 
+  const handleMoveNote = async (note: GeneratedNote, newWeek: number) => {
+    const currentWeek = note.week ?? 1;
+    if (newWeek === currentWeek) return;
+    setMovingNoteId(note.id);
+    try {
+      await updateNoteWeek(note.id, newWeek, userId);
+      onRefresh();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to move');
+    } finally {
+      setMovingNoteId(null);
+    }
+  };
+
+  const notesByWeek = notes.reduce<Record<number, GeneratedNote[]>>((acc, n) => {
+    const w = n.week ?? 1;
+    if (!acc[w]) acc[w] = [];
+    acc[w].push(n);
+    return acc;
+  }, {});
+  const weeks = Object.keys(notesByWeek)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const typeOrder = { slides: 0, tutorial: 1, pastpaper: 2 } as const;
+
   if (notes.length === 0) {
     return (
       <div className="text-center py-16 rounded-xl border-2 border-dashed border-sage/30 bg-parchment/30">
         <FileText className="w-16 h-16 mx-auto text-sage/50 mb-4" />
         <p className="text-ink/70 text-lg mb-2">No notes yet</p>
-        <p className="text-ink/50">Upload files in the Upload tab and click &quot;Generate notes&quot; to create AI-powered revision notes.</p>
+        <p className="text-ink/50">Upload files by week in the Upload tab, then generate notes separately for lectures, tutorials, and past papers.</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-display text-xl text-ink mb-4">Your revision notes</h2>
-      {notes.map((note) => (
+    <div className="space-y-6">
+      <h2 className="font-display text-xl text-ink mb-4">Your revision notes by week</h2>
+      {weeks.map((week) => (
+        <div key={week}>
+          <h3 className="text-sm font-medium text-ink/60 mb-3">Week {week}</h3>
+          <div className="space-y-4">
+            {[...notesByWeek[week]]
+              .sort((a, b) => (typeOrder[a.noteType ?? 'slides'] ?? 0) - (typeOrder[b.noteType ?? 'slides'] ?? 0))
+              .map((note) => (
         <motion.div
           key={note.id}
           layout
@@ -98,9 +134,21 @@ export default function NotesView({ notes, onRefresh, userId }: Props) {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1 shrink-0">
+            <div className="flex items-center gap-2 shrink-0">
               {editingId !== note.id && (
                 <>
+                  <select
+                    value={note.week ?? 1}
+                    onChange={(e) => handleMoveNote(note, Number(e.target.value))}
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={movingNoteId === note.id}
+                    className="text-xs px-2 py-1 rounded border border-ink/20 bg-white text-ink"
+                    title="Move to week"
+                  >
+                    {WEEKS.map((w) => (
+                      <option key={w} value={w}>Week {w}</option>
+                    ))}
+                  </select>
                   <button
                     onClick={(e) => startRename(note, e)}
                     className="p-2 text-ink/50 hover:text-accent hover:bg-parchment/50 rounded-lg transition"
@@ -137,10 +185,24 @@ export default function NotesView({ notes, onRefresh, userId }: Props) {
                   className="note-content p-6 prose prose-slate max-w-none"
                   dangerouslySetInnerHTML={{ __html: marked(note.content) as string }}
                 />
+                <NoteChatPanel
+                  note={note}
+                  sourceFiles={files.filter(
+                    (f) =>
+                      f.moduleId === note.moduleId &&
+                      (f.week ?? 1) === (note.week ?? 1) &&
+                      f.type === (note.noteType ?? 'slides')
+                  )}
+                  userId={userId}
+                  onNoteUpdated={onRefresh}
+                />
               </motion.div>
             )}
           </AnimatePresence>
         </motion.div>
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );

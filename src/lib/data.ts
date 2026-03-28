@@ -92,6 +92,7 @@ export async function getFiles(
     return (data || []).map((r) => ({
       id: r.id,
       moduleId: r.module_id,
+      week: (r as { week?: number }).week ?? 1,
       type: r.type as 'slides' | 'tutorial' | 'pastpaper',
       name: r.name,
       content: r.content,
@@ -99,7 +100,8 @@ export async function getFiles(
     }));
   }
   const db = await getDB();
-  return db.getAllFromIndex('files', 'by-module', moduleId);
+  const files = await db.getAllFromIndex('files', 'by-module', moduleId);
+  return files.map((f) => ({ ...f, week: f.week ?? 1 })) as UploadedFile[];
 }
 
 export async function addFile(
@@ -112,6 +114,7 @@ export async function addFile(
       id: file.id,
       user_id: userId,
       module_id: file.moduleId,
+      week: file.week ?? 1,
       type: file.type,
       name: file.name,
       content: file.content,
@@ -121,6 +124,49 @@ export async function addFile(
   } else {
     const db = await getDB();
     await db.put('files', file);
+  }
+}
+
+export async function updateFileWeek(
+  fileId: string,
+  moduleId: string,
+  week: number,
+  userId: string | null
+): Promise<void> {
+  if (userId) {
+    const supabase = createClient();
+    const { error } = await supabase.from('files').update({ week }).eq('id', fileId);
+    if (error) throw error;
+  } else {
+    const db = await getDB();
+    const file = await db.get('files', fileId);
+    if (!file || file.moduleId !== moduleId) return;
+    (file as UploadedFile).week = week;
+    await db.put('files', file);
+  }
+}
+
+export async function deleteFile(
+  id: string,
+  moduleId: string,
+  name: string,
+  userId: string | null
+): Promise<void> {
+  if (userId) {
+    const supabase = createClient();
+    await supabase.from('notes').update({ source_file_id: null }).eq('source_file_id', id);
+    const { error } = await supabase.from('files').delete().eq('id', id);
+    if (error) throw error;
+  } else {
+    const db = await getDB();
+    const notes = await db.getAllFromIndex('notes', 'by-module', moduleId);
+    for (const n of notes) {
+      if (n.sourceFileId === id) {
+        n.sourceFileId = undefined;
+        await db.put('notes', n);
+      }
+    }
+    await db.delete('files', id);
   }
 }
 
@@ -139,6 +185,8 @@ export async function getNotes(
     return (data || []).map((r) => ({
       id: r.id,
       moduleId: r.module_id,
+      week: (r as { week?: number }).week ?? 1,
+      noteType: (r as { note_type?: string }).note_type as 'slides' | 'tutorial' | 'pastpaper' | undefined,
       sourceFileId: r.source_file_id,
       topic: r.topic,
       content: r.content,
@@ -146,7 +194,21 @@ export async function getNotes(
     }));
   }
   const db = await getDB();
-  return db.getAllFromIndex('notes', 'by-module', moduleId);
+  const notes = await db.getAllFromIndex('notes', 'by-module', moduleId);
+  return notes.map((n) => ({ ...n, week: n.week ?? 1 })) as GeneratedNote[];
+}
+
+export async function deleteNotesForWeekAndType(
+  moduleId: string,
+  week: number,
+  noteType: 'slides' | 'tutorial' | 'pastpaper',
+  userId: string | null
+): Promise<void> {
+  const notes = await getNotes(moduleId, userId);
+  const toDelete = notes.filter((n) => (n.week ?? 1) === week && n.noteType === noteType);
+  for (const n of toDelete) {
+    await deleteNote(n.id, userId);
+  }
 }
 
 export async function addNote(
@@ -159,6 +221,8 @@ export async function addNote(
       id: note.id,
       user_id: userId,
       module_id: note.moduleId,
+      week: note.week ?? 1,
+      note_type: note.noteType || null,
       source_file_id: note.sourceFileId || null,
       topic: note.topic,
       content: note.content,
@@ -182,6 +246,59 @@ export async function deleteNote(
   } else {
     const db = await getDB();
     await db.delete('notes', id);
+  }
+}
+
+export async function deleteNotesForWeek(
+  moduleId: string,
+  week: number,
+  userId: string | null
+): Promise<void> {
+  const notes = await getNotes(moduleId, userId);
+  const toDelete = notes.filter((n) => (n.week ?? 1) === week);
+  for (const n of toDelete) {
+    await deleteNote(n.id, userId);
+  }
+}
+
+export async function updateNoteWeek(
+  noteId: string,
+  week: number,
+  userId: string | null
+): Promise<void> {
+  if (userId) {
+    const supabase = createClient();
+    const { error } = await supabase.from('notes').update({ week }).eq('id', noteId);
+    if (error) throw error;
+  } else {
+    const db = await getDB();
+    const note = await db.get('notes', noteId);
+    if (note) {
+      (note as GeneratedNote).week = week;
+      await db.put('notes', note);
+    }
+  }
+}
+
+export async function updateNoteContent(
+  id: string,
+  content: string,
+  userId: string | null
+): Promise<void> {
+  if (userId) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from('notes')
+      .update({ content })
+      .eq('id', id);
+    if (error) throw error;
+  } else {
+    const db = await getDB();
+    const note = await db.get('notes', id);
+    if (note) {
+      (note as GeneratedNote).content = content;
+      await db.put('notes', note);
+    }
   }
 }
 
@@ -361,6 +478,7 @@ export async function migrateLocalDataToSupabase(
           id: f.id,
           user_id: userId,
           module_id: f.moduleId,
+          week: f.week ?? 1,
           type: f.type,
           name: f.name,
           content: f.content,
@@ -373,6 +491,8 @@ export async function migrateLocalDataToSupabase(
           id: n.id,
           user_id: userId,
           module_id: n.moduleId,
+          week: n.week ?? 1,
+          note_type: n.noteType || null,
           source_file_id: n.sourceFileId || null,
           topic: n.topic,
           content: n.content,

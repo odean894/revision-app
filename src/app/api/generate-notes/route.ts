@@ -48,7 +48,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    let body: { text?: string; topic?: string };
+    let body: { text?: string; topic?: string; isTutorial?: boolean };
     try {
       const raw = await req.text();
       if (!raw?.trim()) {
@@ -58,15 +58,51 @@ export async function POST(req: NextRequest) {
     } catch {
       return NextResponse.json({ error: 'Invalid JSON in request body' }, { status: 400 });
     }
-    const { text, topic } = body;
+    const { text, topic, isTutorial } = body;
     if (!text || typeof text !== 'string') {
       return NextResponse.json({ error: 'Missing text' }, { status: 400 });
     }
 
-    const truncated = text.slice(0, 8000);
-    const prompt = topic
-      ? `Create detailed revision notes from this ${topic} content. Structure with clear headings, bullet points, key definitions, and important concepts. Make it easy to study and remember for exams.`
-      : `Create detailed revision notes from this lecture/tutorial content. Structure with clear headings, bullet points, key definitions, formulas (if any), and important concepts. Make it comprehensive and exam-ready.`;
+    const truncated = text.slice(0, 32000);
+
+    let systemPrompt: string;
+    let userPrompt: string;
+
+    if (isTutorial) {
+      systemPrompt =
+        `You are a patient tutor creating exam-ready study notes from tutorial Q&A documents. The answers and numbers MUST come from the document - do not invent or change them. But present everything in a clear, readable format that helps the student understand how to tackle similar questions in an exam.
+
+For each question in the document, structure your output as:
+
+## Question
+State the question clearly (from the document).
+
+## Given / Key info (use a table when helpful)
+| Variable | Value |
+|----------|-------|
+| ... | ... |
+
+## Step-by-step solution
+Number each step (Step 1, Step 2, ...). For EACH step:
+- What to do (the action)
+- Why (the concept or rule)
+- The result (use the numbers/answers from the document - do not change them)
+
+## Final answer
+The answer exactly as in the document (same numbers, same units).
+
+## Exam tip
+One sentence on how to approach this type of question in the exam.
+
+FORMATTING: Use markdown ## headings, tables (| col | col |), numbered steps (Step 1, Step 2...), bullet points, bold for key terms. Add blank lines between sections. If the question has parts (a), (b), (c), give separate step-by-step for each part. Keep it readable and well-spaced. Use standard hyphens (-) and avoid special Unicode characters.`;
+      userPrompt = `Create clear, exam-ready study notes from this tutorial document. For each question: (1) State the question. (2) Use a table for given values if applicable. (3) Give numbered step-by-step instructions that explain each part - what to do, why, and the result. Use the exact answers and numbers from the document. (4) End with the final answer from the document. (5) Add a brief exam tip. Make it readable and easy to follow.\n\n---\n\nDocument content:\n\n${truncated}`;
+    } else {
+      systemPrompt =
+        'You are an expert university tutor. Create clear, comprehensive revision notes from the provided content. Use markdown formatting: headings (##, ###), bullet points (-), tables (| Term | Definition |), bold for key terms (**term**). Use standard hyphens (-) and avoid special Unicode characters. Format definitions in tables where helpful.';
+      userPrompt = topic
+        ? `Create detailed revision notes from this ${topic} content. Structure with clear headings, bullet points, key definitions, and important concepts. Make it easy to study and remember for exams.\n\n---\n\nContent:\n\n${truncated}`
+        : `Create detailed revision notes from this lecture/tutorial content. Structure with clear headings, bullet points, key definitions, formulas (if any), and important concepts. Make it comprehensive and exam-ready.\n\n---\n\nContent:\n\n${truncated}`;
+    }
 
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -77,17 +113,10 @@ export async function POST(req: NextRequest) {
 
     const payload = {
       messages: [
-        {
-          role: 'system',
-          content:
-            'You are an expert university tutor. Create clear, comprehensive revision notes from the provided content. Use markdown formatting with headings (##), bullet points, bold for key terms.',
-        },
-        {
-          role: 'user',
-          content: `${prompt}\n\n---\n\nContent:\n\n${truncated}`,
-        },
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
       ],
-      temperature: 0.4,
+      temperature: isTutorial ? 0.2 : 0.4,
     };
 
     let lastError = '';

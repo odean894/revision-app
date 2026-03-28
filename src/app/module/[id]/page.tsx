@@ -113,6 +113,7 @@ export default function ModulePage() {
         {tab === 'notes' && (
           <NotesView
             notes={notes}
+            files={files}
             onRefresh={refreshNotes}
             userId={user?.id ?? null}
           />

@@ -10,6 +10,7 @@ export interface Module {
 export interface UploadedFile {
   id: string;
   moduleId: string;
+  week?: number; // 1-11, defaults to 1 for backward compat
   type: 'slides' | 'tutorial' | 'pastpaper';
   name: string;
   content: string;
@@ -19,6 +20,8 @@ export interface UploadedFile {
 export interface GeneratedNote {
   id: string;
   moduleId: string;
+  week?: number; // 1-11, defaults to 1 for backward compat
+  noteType?: 'slides' | 'tutorial' | 'pastpaper'; // which section generated this
   sourceFileId?: string;
   topic: string;
   content: string;
@@ -60,7 +63,7 @@ interface RevisionDB extends DBSchema {
 }
 
 const DB_NAME = 'revision-app';
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 
 let dbPromise: Promise<IDBPDatabase<RevisionDB>> | null = null;
 
@@ -80,6 +83,9 @@ export function getDB() {
         }
         if (oldVer < 2) {
           db.createObjectStore('quizProgress', { keyPath: 'moduleId' });
+        }
+        if (oldVer < 3) {
+          // Week field added; existing records default to week 1 at read time
         }
       },
     });
